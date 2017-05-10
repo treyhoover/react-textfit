@@ -58,6 +58,7 @@
     "get-node-dimensions": "^1.2.0",
     "lodash": "^4.17.4",
     "process": "^0.11.9",
-    "react-measure": "^1.4.7"
+    "react-measure": "^1.4.7",
+    "resize-observer-polyfill": "^1.4.2"
   }
 }
