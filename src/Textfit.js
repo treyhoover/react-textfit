@@ -2,139 +2,139 @@ import React, { PropTypes } from 'react';
 // import createResizeDetector from 'element-resize-detector';
 import { merge, debounce, throttle } from 'lodash';
 
-// const resizeDetector = createResizeDetector({
-//   strategy: 'scroll',
-// });
+// const resizeDetector = createResizeDetector();
+
+const MAX_ATTEMPTS = 1000;
+
+const isOverflowing = (el) => {
+  if (!el) throw new Error('Element is required');
+
+  const overflowX = el.scrollWidth > el.clientWidth;
+  const overflowY = el.scrollHeight > el.clientHeight;
+
+  return overflowX || overflowY;
+};
 
 // necessary because react's default props won't do "deep" merges
 const defaultProps = {
   fontSize: {
     min: 1,
-    max: 20,
-    unit: 'vw',
+    max: 400,
+    unit: 'px',
   },
   style: {
     display: 'block',
-    transition: 'all 100ms ease-in',
+    overflow: 'scroll',
+    transition: '200ms ease-in',
   }
 };
 
 class Textfit extends React.Component {
   constructor(props) {
-    super(merge(defaultProps, props));
+    super(props);
+
+    const settings = merge(defaultProps, props);
+    const { min, max } = settings.fontSize;
+
+    // super(merge(defaultProps, props));
 
     this.state = {
-      fontSize: this.props.fontSize.max,
+      settings,
+      fontSize: (min + max) / 2,
       loaded: false,
     };
-
-    this.resize = throttle(this.resize, 50);
   }
 
-  get containerWidth() {
-    try {
-      return this.ref.parentElement.clientWidth;
-    } catch (e) {
-      return 0;
-    }
+  componentDidMount() {
+    window.addEventListener('resize', this.resize);
   }
 
-  get containerHeight() {
-    try {
-      return this.ref.parentElement.clientHeight;
-    } catch (e) {
-      return 0;
-    }
+  componentWillUnmount() {
+    window.removeEventListener('resize', this.resize);
   }
 
-  getFontSize(el) {
-    return parseInt(el.style.fontSize, 10);
-  }
-
-  fontSizeIsValid(fontSize) {
-    const { min, max } = this.props.fontSize;
-
-    return fontSize <= max && fontSize >= min;
+  componentWillReceiveProps() {
+    this.resize();
   }
 
   resize = () => {
-    // TODO: this is the function that breaks when used in combination with transitions
-    // most likely because we're manipulating refed elements directly :O
-    // doing it the "react" way should fix it
+    // // TODO: this is the function that breaks when used in combination with transitions
+    // // most likely because we're manipulating refed elements directly :O
+    // // doing it the "react" way should fix it
 
-    // const { loaded } = this.state;
-    //
-    // if (!loaded) return;
-    //
-    // const el = this.ref;
-    //
-    // let floor = this.props.fontSize.min;
-    //
-    // let ceiling = this.props.fontSize.max;
-    // let delta = ceiling - floor;
-    // let fontSize = floor;
-    //
-    // const minDelta = 1;
-    //
-    // // scale up font-size to fill space
-    // while (this.isOverflowing(el) || delta > minDelta) {
-    //   delta = ceiling - floor;
-    //
-    //   const newFontSize = floor + (delta / 2);
-    //
-    //   el.style.fontSize = `${newFontSize}${this.props.fontSize.unit}`;
-    //
-    //   fontSize = newFontSize;
-    //
-    //   if (this.isOverflowing(el)) {
-    //     ceiling = newFontSize;
-    //   } else {
-    //     floor = newFontSize;
-    //   }
-    //
-    //   this.setState({
-    //     fontSize
-    //   });
-    // }
-    //
-    // this.setState({ fontSize });
-  };
+    return new Promise((resolve, reject) => {
+      const { settings } = this.state;
+      const el = this.ref;
 
-  isOverflowing = (element) => {
-    const el = element || this.ref;
+      if (el) {
+        let floor = settings.fontSize.min;
+        let ceiling = settings.fontSize.max;
+        let fontSize = floor;
 
-    if (!el) return true;
+        const minDelta = 1;
+        const elStyles = getComputedStyle(el, null);
+        const elTransition = elStyles.transition;
 
-    // check self
-    const overflowX = el.scrollWidth > el.clientWidth;
-    const overflowY = el.scrollHeight > el.clientHeight;
+        // disable transitions while finding the font-size
+        el.style.transition = '';
 
-    if (overflowX || overflowY) return true;
+        for (let i = 0; i < MAX_ATTEMPTS; i++) {
+          const delta = ceiling - floor;
+          const overflowing = isOverflowing(el);
+          console.log('resizing', { floor, ceiling, fontSize, overflowing });
 
-    // check parent
-    const parentOverflowX = el.parentElement.scrollWidth > el.parentElement.clientWidth;
-    const parentOverflowY = el.parentElement.scrollHeight > el.parentElement.clientHeight;
+          const newFontSize = floor + (delta / 2);
 
-    return parentOverflowX || parentOverflowY;
+          el.style.fontSize = `${newFontSize}${this.props.fontSize.unit}`;
+
+          fontSize = newFontSize;
+
+          if (isOverflowing(el)) {
+            ceiling = newFontSize;
+          } else {
+            floor = newFontSize;
+          }
+
+          // break if we're precise enough
+          if (delta <= minDelta) {
+            break;
+          } else {
+            // this.setState({ fontSize });
+          }
+        }
+
+        el.transition = elTransition;
+
+        this.setState({ fontSize }, () => {
+          resolve({ fontSize });
+        });
+      } else {
+        reject(new Error('Can\'t resize - ref not yet loaded'));
+      }
+    });
   };
 
   bindRef = (ref) => {
     this.ref = ref;
 
-    const onChange = debounce(() => {
-      console.log('changed');
-    }, 300);
+    // const onChange = debounce(() => {
+    //   console.log('changed');
+    //   this.resize();
+    // }, 300);
 
     // resizeDetector.listenTo(this.ref, onChange);
 
-    this.setState({ loaded: true }, this.resize);
+    this.resize()
+      .then(() => {
+        this.setState({ loaded: true });
+      })
+      .catch(console.error);
   };
 
   render() {
     const { loaded, fontSize } = this.state;
     const { style, children } = this.props;
     const fontSizeWithUnit = `${fontSize}${this.props.fontSize.unit}`;
-    // console.log(fontSizeWithUnit);
 
     return (
       <div
@@ -148,7 +148,7 @@ class Textfit extends React.Component {
       >
         {children}
       </div>
-    )
+    );
   }
 }
 
