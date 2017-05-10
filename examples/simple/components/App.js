@@ -14,26 +14,6 @@ export default createClass({
         };
     },
 
-    handleChangeText(e) {
-        const text = e.target.value;
-        this.setState({ text });
-    },
-
-    handleChangeMode(e) {
-        const mode = e.target.value;
-        this.setState({ mode });
-    },
-
-    handleChangeForceWidth(e) {
-        const forceSingleModeWidth = e.target.checked;
-        this.setState({ forceSingleModeWidth });
-    },
-
-    handleChangePerfectFit(e) {
-        const perfectFit = e.target.checked;
-        this.setState({ perfectFit });
-    },
-
     render() {
         return (
           <div>

@@ -1,10 +1,10 @@
 import React, { PropTypes } from 'react';
-import createResizeDetector from 'element-resize-detector';
-import { merge, throttle } from 'lodash';
+// import createResizeDetector from 'element-resize-detector';
+import { merge, debounce, throttle } from 'lodash';
 
-const resizeDetector = createResizeDetector({
-  strategy: 'scroll',
-});
+// const resizeDetector = createResizeDetector({
+//   strategy: 'scroll',
+// });
 
 // necessary because react's default props won't do "deep" merges
 const defaultProps = {
@@ -15,6 +15,7 @@ const defaultProps = {
   },
   style: {
     display: 'block',
+    transition: 'all 100ms ease-in',
   }
 };
 
@@ -27,7 +28,7 @@ class Textfit extends React.Component {
       loaded: false,
     };
 
-    this.resize = throttle(this.resize, 150);
+    this.resize = throttle(this.resize, 50);
   }
 
   get containerWidth() {
@@ -57,44 +58,46 @@ class Textfit extends React.Component {
   }
 
   resize = () => {
-    const { loaded } = this.state;
+    // TODO: this is the function that breaks when used in combination with transitions
+    // most likely because we're manipulating refed elements directly :O
+    // doing it the "react" way should fix it
 
-    if (!loaded) return;
-
-    const el = this.ref;
-    el.style.display = 'block';
-    el.style.overflow = 'scroll';
-
-    let floor = this.props.fontSize.min;
-
-    let ceiling = this.props.fontSize.max;
-    let delta = ceiling - floor;
-    let fontSize = floor;
-
-    const minDelta = 1;
-
-    // scale up font-size to fill space
-    while (this.isOverflowing(el) || delta > minDelta) {
-      delta = ceiling - floor;
-
-      const newFontSize = floor + (delta / 2);
-
-      el.style.fontSize = `${newFontSize}${this.props.fontSize.unit}`;
-
-      fontSize = newFontSize;
-
-      if (this.isOverflowing(el)) {
-        ceiling = newFontSize;
-      } else {
-        floor = newFontSize;
-      }
-
-      this.setState({
-        fontSize
-      });
-    }
-
-    this.setState({ fontSize });
+    // const { loaded } = this.state;
+    //
+    // if (!loaded) return;
+    //
+    // const el = this.ref;
+    //
+    // let floor = this.props.fontSize.min;
+    //
+    // let ceiling = this.props.fontSize.max;
+    // let delta = ceiling - floor;
+    // let fontSize = floor;
+    //
+    // const minDelta = 1;
+    //
+    // // scale up font-size to fill space
+    // while (this.isOverflowing(el) || delta > minDelta) {
+    //   delta = ceiling - floor;
+    //
+    //   const newFontSize = floor + (delta / 2);
+    //
+    //   el.style.fontSize = `${newFontSize}${this.props.fontSize.unit}`;
+    //
+    //   fontSize = newFontSize;
+    //
+    //   if (this.isOverflowing(el)) {
+    //     ceiling = newFontSize;
+    //   } else {
+    //     floor = newFontSize;
+    //   }
+    //
+    //   this.setState({
+    //     fontSize
+    //   });
+    // }
+    //
+    // this.setState({ fontSize });
   };
 
   isOverflowing = (element) => {
@@ -118,9 +121,11 @@ class Textfit extends React.Component {
   bindRef = (ref) => {
     this.ref = ref;
 
-    resizeDetector.listenTo(this.ref, (element) => {
-      this.resize();
-    });
+    const onChange = debounce(() => {
+      console.log('changed');
+    }, 300);
+
+    // resizeDetector.listenTo(this.ref, onChange);
 
     this.setState({ loaded: true }, this.resize);
   };
