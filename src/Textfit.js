@@ -1,10 +1,21 @@
 import React, { PropTypes } from 'react';
+import ReactDOM from 'react-dom'
+import Measure from 'react-measure';
+import cloneNode from './utils/cloneNode';
+
 // import createResizeDetector from 'element-resize-detector';
 import { merge, debounce, throttle } from 'lodash';
 
 // const resizeDetector = createResizeDetector();
 
-const MAX_ATTEMPTS = 1000;
+const maxAttempts = 1000;
+
+const forceRedraw = (element) => {
+  const disp = element.style.display;
+  element.style.display = 'none';
+  const trick = element.offsetHeight;
+  element.style.display = disp;
+};
 
 const isOverflowing = (el) => {
   if (!el) throw new Error('Element is required');
@@ -24,8 +35,9 @@ const defaultProps = {
   },
   style: {
     display: 'block',
-    overflow: 'scroll',
+    overflow: 'hidden',
     transition: '200ms ease-in',
+    height: '100%',
   }
 };
 
@@ -36,118 +48,84 @@ class Textfit extends React.Component {
     const settings = merge(defaultProps, props);
     const { min, max } = settings.fontSize;
 
-    // super(merge(defaultProps, props));
-
     this.state = {
       settings,
-      fontSize: (min + max) / 2,
-      loaded: false,
+      fontSize: (min + max) / 2
     };
   }
 
   componentDidMount() {
-    window.addEventListener('resize', this.resize);
+    this._setDOMNode();
   }
 
-  componentWillUnmount() {
-    window.removeEventListener('resize', this.resize);
-  }
-
-  componentWillReceiveProps() {
-    this.resize();
-  }
-
-  resize = () => {
-    // // TODO: this is the function that breaks when used in combination with transitions
-    // // most likely because we're manipulating refed elements directly :O
-    // // doing it the "react" way should fix it
-
-    return new Promise((resolve, reject) => {
-      const { settings } = this.state;
-      const el = this.ref;
-
-      if (el) {
-        let floor = settings.fontSize.min;
-        let ceiling = settings.fontSize.max;
-        let fontSize = floor;
-
-        const minDelta = 1;
-        const elStyles = getComputedStyle(el, null);
-        const elTransition = elStyles.transition;
-
-        // disable transitions while finding the font-size
-        el.style.transition = '';
-
-        for (let i = 0; i < MAX_ATTEMPTS; i++) {
-          const delta = ceiling - floor;
-          const overflowing = isOverflowing(el);
-          console.log('resizing', { floor, ceiling, fontSize, overflowing });
-
-          const newFontSize = floor + (delta / 2);
-
-          el.style.fontSize = `${newFontSize}${this.props.fontSize.unit}`;
-
-          fontSize = newFontSize;
-
-          if (isOverflowing(el)) {
-            ceiling = newFontSize;
-          } else {
-            floor = newFontSize;
-          }
-
-          // break if we're precise enough
-          if (delta <= minDelta) {
-            break;
-          } else {
-            // this.setState({ fontSize });
-          }
-        }
-
-        el.transition = elTransition;
-
-        this.setState({ fontSize }, () => {
-          resolve({ fontSize });
-        });
-      } else {
-        reject(new Error('Can\'t resize - ref not yet loaded'));
-      }
-    });
+  _setDOMNode = () => {
+    this._node = ReactDOM.findDOMNode(this);
   };
 
-  bindRef = (ref) => {
-    this.ref = ref;
+  get fits() {
+    const { fontSize, settings } = this.state;
+    const { min, max } = settings.fontSize;
 
-    // const onChange = debounce(() => {
-    //   console.log('changed');
-    //   this.resize();
-    // }, 300);
+    const overflowing = isOverflowing(this._node);
 
-    // resizeDetector.listenTo(this.ref, onChange);
+    if (overflowing && fontSize <= max) {
+      return false;
+    }
 
-    this.resize()
-      .then(() => {
-        this.setState({ loaded: true });
-      })
-      .catch(console.error);
-  };
+    return fontSize <= min || fontSize >= max;
+  }
 
   render() {
-    const { loaded, fontSize } = this.state;
+    let fontSize = this.state.fontSize;
     const { style, children } = this.props;
-    const fontSizeWithUnit = `${fontSize}${this.props.fontSize.unit}`;
+    // const fontSizeWithUnit = `${fontSize}${this.props.fontSize.unit}`;
 
     return (
-      <div
-        ref={this.bindRef}
-        style={{
-          ...style,
-          height: '100%',
-          fontSize: fontSizeWithUnit,
-          display: loaded ? style.display : 'none',
+      <Measure>
+        {(dimensions) => {
+          if (this._node) {
+            const {clone } = cloneNode(this._node, {
+              display: 'block',
+              width: this._node.clientWidth,
+              height: this._node.clientHeight,
+            });
+
+            clone.style.transition = 'none';
+
+            let floor = 1;
+            let ceiling = 1000;
+            let newFontSize = parseInt(clone.style.fontSize, 10);
+
+            for (let i = 0; i < maxAttempts; i++) {
+              if (ceiling - floor < 1) break;
+
+              if (isOverflowing(clone)) {
+                ceiling = newFontSize;
+              } else {
+                floor = newFontSize;
+              }
+
+              newFontSize = (floor + ceiling) / 2;
+              clone.style.fontSize = `${newFontSize}px`;
+
+              forceRedraw(clone);
+
+              fontSize = newFontSize;
+            }
+          }
+
+          return (
+            <div
+              style={{
+                ...style,
+                fontSize,
+              }}
+            >
+              {children}
+            </div>
+          );
         }}
-      >
-        {children}
-      </div>
+      </Measure>
     );
   }
 }
@@ -159,11 +137,13 @@ Textfit.propTypes = {
     unit: PropTypes.oneOf(['px', 'vw']),
   }),
   style: PropTypes.object,
+  children: PropTypes.string.isRequired,
 };
 
 Textfit.defaultProps = {
   fontSize: defaultProps.fontSize,
   style: defaultProps.style,
+  children: '',
 };
 
 Textfit.displayName = 'Textfit';
