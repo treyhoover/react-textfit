@@ -150,13 +150,12 @@ Textfit.propTypes = {
         unit: PropTypes.oneOf(['px', 'vw']),
     }),
     style: PropTypes.object,
-    children: PropTypes.string.isRequired,
+    children: PropTypes.any,
 };
 
 Textfit.defaultProps = {
     fontSize: defaultProps.fontSize,
     style: defaultProps.style,
-    children: '',
 };
 
 Textfit.displayName = 'Textfit';
