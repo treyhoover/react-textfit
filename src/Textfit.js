@@ -80,10 +80,8 @@ export default createClass({
     },
 
     componentWillUnmount() {
-        const { autoResize } = this.props;
-        if (autoResize) {
-            window.removeEventListener('resize', this.handleWindowResize);
-        }
+        window.removeEventListener('resize', this.handleWindowResize);
+
         // Setting a new pid will cancel all running processes
         this.pid = uniqueId();
     },
