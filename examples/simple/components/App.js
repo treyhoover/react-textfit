@@ -1,26 +1,31 @@
-import React, { createClass } from 'react';
+import React from 'react';
 import { Textfit } from 'react-textfit';
 
-export default createClass({
+const App = (props) => (
+    <div>
+        <div className="headline">
+            <Textfit className="textfit">
+                <h1 style={{ whiteSpace: 'nowrap', margin: 0 }}>TextFit!</h1>
+            </Textfit>
+        </div>
 
-    displayName: 'App',
+        <div className="column-50 left">
+            <Textfit>
+                At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium
+                voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint
+                occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt
+                mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est
+                et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio
+                cumque nihil impedit quo minus id quod maxime.
+            </Textfit>
+        </div>
 
-    getInitialState() {
-        return {
-            text: 'Edit this text!',
-            mode: 'multi',
-            forceSingleModeWidth: true,
-            perfectFit: true
-        };
-    },
+        <div className="column-50 right quote">
+            <Textfit>
+                “Lorem ipsum dolor sit amet, consetetur sadipscing elitr.”
+            </Textfit>
+        </div>
+    </div>
+);
 
-    render() {
-        return (
-          <div>
-              <Textfit className="textfit">
-                  Lorem ipsum dolor sit amet, consetetur sadipscing elitr.
-              </Textfit>
-          </div>
-        );
-    }
-});
+export default App;

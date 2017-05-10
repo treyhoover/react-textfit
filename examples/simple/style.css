@@ -1,3 +1,30 @@
 * {
     box-sizing: border-box;
 }
+
+html, body {
+    margin: 0;
+}
+
+.headline {
+    height: 25vh;
+    text-align: center;
+}
+
+.column-50 {
+    height: 75vh;
+    width: 50%;
+    padding: 0 25px;
+}
+
+.column-50.left {
+    float: left;
+}
+
+.column-50.right {
+    float: right;
+}
+
+.quote {
+    line-height: 1;
+}
