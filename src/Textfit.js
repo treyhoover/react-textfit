@@ -44,24 +44,24 @@ class Textfit extends React.Component {
       super(props);
 
       const settings = merge(defaultProps, props);
-      const { min, max } = settings.fontSize;
+      const { min } = settings.fontSize;
 
       this.state = {
           settings,
-          fontSize: (min + max) / 2
+          fontSize: min,
       };
   }
 
   componentDidMount() {
-    const onResize = debounce(this.resize, 200);
+      const onResize = debounce(this.resize, 200);
 
-    this.resizeObserver = new ResizeObserver(onResize);
-    this.resizeObserver.observe(this._node);
+      this.resizeObserver = new ResizeObserver(onResize);
+      this.resizeObserver.observe(this._node);
   }
 
   componentWillUnmount() {
-    this.resizeObserver.disconnect(this._node);
-    this._node = null;
+      this.resizeObserver.disconnect(this._node);
+      this._node = null;
   }
 
   get fits() {
@@ -117,7 +117,7 @@ class Textfit extends React.Component {
   };
 
   bindRef = (_node) => {
-    this._node = _node;
+      this._node = _node;
 
     // We don't need this initial resize call since ResizeObserver
     // appears to always fire when it initializes
