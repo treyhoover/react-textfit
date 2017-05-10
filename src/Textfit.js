@@ -1,242 +1,166 @@
-import React, { createClass, PropTypes } from 'react';
-import { findDOMNode } from 'react-dom';
-import shallowEqual from './utils/shallowEqual';
-import series from './utils/series';
-import whilst from './utils/whilst';
-import throttle from './utils/throttle';
-import uniqueId from './utils/uniqueId';
-import { innerWidth, innerHeight } from './utils/innerSize';
+import React, { PropTypes } from 'react';
+import createResizeDetector from 'element-resize-detector';
+import { merge, throttle } from 'lodash';
 
-function assertElementFitsWidth(el, width) {
-    // -1: temporary bugfix, will be refactored soon
-    return el.scrollWidth - 1 <= width;
-}
-
-function assertElementFitsHeight(el, height) {
-    // -1: temporary bugfix, will be refactored soon
-    return el.scrollHeight - 1 <= height;
-}
-
-function noop() {}
-
-export default createClass({
-
-    displayName: 'Textfit',
-
-    propTypes: {
-        children: PropTypes.oneOfType([
-            PropTypes.string,
-            PropTypes.func
-        ]),
-        text: PropTypes.string,
-        min: PropTypes.number,
-        max: PropTypes.number,
-        mode: PropTypes.oneOf([
-            'single', 'multi'
-        ]),
-        forceSingleModeWidth: PropTypes.bool,
-        perfectFit: PropTypes.bool,
-        throttle: PropTypes.number,
-        onReady: PropTypes.func
-    },
-
-    getDefaultProps() {
-        return {
-            min: 1,
-            max: 100,
-            mode: 'multi',
-            forceSingleModeWidth: true,
-            perfectFit: true,
-            throttle: 50,
-            autoResize: true,
-            onReady: noop
-        };
-    },
-
-    getInitialState() {
-        return {
-            fontSize: null,
-            ready: false
-        };
-    },
-
-    componentWillMount() {
-        this.handleWindowResize = throttle(this.handleWindowResize, this.props.throttle);
-    },
-
-    componentDidMount() {
-        const { autoResize } = this.props;
-        if (autoResize) {
-            window.addEventListener('resize', this.handleWindowResize);
-        }
-        this.process();
-    },
-
-    componentDidUpdate(prevProps) {
-        const { ready } = this.state;
-        if (!ready) return;
-        if (shallowEqual(this.props, prevProps)) return;
-        this.process();
-    },
-
-    componentWillUnmount() {
-        window.removeEventListener('resize', this.handleWindowResize);
-
-        // Setting a new pid will cancel all running processes
-        this.pid = uniqueId();
-    },
-
-    handleWindowResize() {
-        this.process();
-    },
-
-    process() {
-        const { min, max, mode, forceSingleModeWidth, perfectFit, onReady } = this.props;
-        const el = findDOMNode(this);
-        const { wrapper } = this.refs;
-
-        const originalWidth = innerWidth(el);
-        const originalHeight = innerHeight(el);
-
-        if (originalHeight <= 0 || isNaN(originalHeight)) {
-            console.warn('Can not process element without height. Make sure the element is displayed and has a static height.');
-            return;
-        }
-
-        if (originalWidth <= 0 || isNaN(originalWidth)) {
-            console.warn('Can not process element without width. Make sure the element is displayed and has a static width.');
-            return;
-        }
-
-        const pid = uniqueId();
-        this.pid = pid;
-
-        const shouldCancelProcess = () => pid !== this.pid;
-
-        const testPrimary = mode === 'multi'
-            ? () => assertElementFitsHeight(wrapper, originalHeight)
-            : () => assertElementFitsWidth(wrapper, originalWidth);
-
-        const testSecondary = mode === 'multi'
-            ? () => assertElementFitsWidth(wrapper, originalWidth)
-            : () => assertElementFitsHeight(wrapper, originalHeight);
-
-        let mid;
-        let low = min;
-        let high = max;
-
-        this.setState({ ready: false});
-
-        series([
-            // Step 1:
-            // Binary search to fit the element's height (multi line) / width (single line)
-            stepCallback => whilst(
-                () => low <= high,
-                whilstCallback => {
-                    if (shouldCancelProcess()) return whilstCallback(true);
-                    mid = parseInt((low + high) / 2, 10);
-                    this.setState({ fontSize: mid }, () => {
-                        if (shouldCancelProcess()) return whilstCallback(true);
-                        if (testPrimary()) low = mid + 1;
-                        else high = mid - 1;
-                        return whilstCallback();
-                    });
-                },
-                stepCallback
-            ),
-            // Step 2:
-            // Binary search to fit the element's width (multi line) / height (single line)
-            // If mode is single and forceSingleModeWidth is true, skip this step
-            // in order to not fit the elements height and decrease the width
-            stepCallback => {
-                if (mode === 'single' && forceSingleModeWidth) return stepCallback();
-                if (testSecondary()) return stepCallback();
-                low = min;
-                high = mid;
-                return whilst(
-                    () => low <= high,
-                    whilstCallback => {
-                        if (shouldCancelProcess()) return whilstCallback(true);
-                        mid = parseInt((low + high) / 2, 10);
-                        this.setState({ fontSize: mid }, () => {
-                            if (pid !== this.pid) return whilstCallback(true);
-                            if (testSecondary()) low = mid + 1;
-                            else high = mid - 1;
-                            return whilstCallback();
-                        });
-                    },
-                    stepCallback
-                );
-            },
-            // Step 3
-            // Sometimes the text still overflows the elements bounds.
-            // If perfectFit is true, decrease fontSize until it fits.
-            stepCallback => {
-                if (!perfectFit) return stepCallback();
-                if (testPrimary()) return stepCallback();
-                whilst(
-                    () => !testPrimary(),
-                    whilstCallback => {
-                        if (shouldCancelProcess()) return whilstCallback(true);
-                        this.setState({ fontSize: --mid }, whilstCallback);
-                    },
-                    stepCallback
-                );
-            },
-            // Step 4
-            // Make sure fontSize is always greater than 0
-            stepCallback => {
-                if (mid > 0) return stepCallback();
-                mid = 1;
-                this.setState({ fontSize: mid }, stepCallback);
-            }
-        ], err => {
-            // err will be true, if another process was triggered
-            if (err) return;
-            this.setState({ ready: true }, () => onReady(mid));
-        });
-    },
-
-    render() {
-        const {
-            children,
-            text,
-            style,
-            min,
-            max,
-            mode,
-            forceWidth,
-            forceSingleModeWidth,
-            perfectFit,
-            /* eslint-disable no-shadow */
-            throttle,
-            /* eslint-enable no-shadow */
-            autoResize,
-            onReady,
-            ...props
-        } = this.props;
-        const { fontSize, ready } = this.state;
-        const finalStyle = {
-            ...style,
-            fontSize: fontSize
-        };
-
-        const wrapperStyle = {
-            display: ready ? 'block' : 'inline-block'
-        };
-        if (mode === 'single') wrapperStyle.whiteSpace = 'nowrap';
-
-        return (
-            <div style={finalStyle} {...props}>
-                <span ref="wrapper" style={wrapperStyle}>
-                    {text && typeof children === 'function'
-                        ? ready
-                            ? children(text)
-                            : text
-                        : children
-                    }
-                </span>
-            </div>
-        );
-    }
+const resizeDetector = createResizeDetector({
+  strategy: 'scroll',
 });
+
+// necessary because react's default props won't do "deep" merges
+const defaultProps = {
+  fontSize: {
+    min: 1,
+    max: 20,
+    unit: 'vw',
+  },
+  style: {
+    display: 'block',
+  }
+};
+
+class Textfit extends React.Component {
+  constructor(props) {
+    super(merge(defaultProps, props));
+
+    this.state = {
+      fontSize: this.props.fontSize.max,
+      loaded: false,
+    };
+
+    this.resize = throttle(this.resize, 150);
+  }
+
+  get containerWidth() {
+    try {
+      return this.ref.parentElement.clientWidth;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  get containerHeight() {
+    try {
+      return this.ref.parentElement.clientHeight;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  getFontSize(el) {
+    return parseInt(el.style.fontSize, 10);
+  }
+
+  fontSizeIsValid(fontSize) {
+    const { min, max } = this.props.fontSize;
+
+    return fontSize <= max && fontSize >= min;
+  }
+
+  resize = () => {
+    const { loaded } = this.state;
+
+    if (!loaded) return;
+
+    const el = this.ref;
+    el.style.display = 'block';
+    el.style.overflow = 'scroll';
+
+    let floor = this.props.fontSize.min;
+
+    let ceiling = this.props.fontSize.max;
+    let delta = ceiling - floor;
+    let fontSize = floor;
+
+    const minDelta = 1;
+
+    // scale up font-size to fill space
+    while (this.isOverflowing(el) || delta > minDelta) {
+      delta = ceiling - floor;
+
+      const newFontSize = floor + (delta / 2);
+
+      el.style.fontSize = `${newFontSize}${this.props.fontSize.unit}`;
+
+      fontSize = newFontSize;
+
+      if (this.isOverflowing(el)) {
+        ceiling = newFontSize;
+      } else {
+        floor = newFontSize;
+      }
+
+      this.setState({
+        fontSize
+      });
+    }
+
+    this.setState({ fontSize });
+  };
+
+  isOverflowing = (element) => {
+    const el = element || this.ref;
+
+    if (!el) return true;
+
+    // check self
+    const overflowX = el.scrollWidth > el.clientWidth;
+    const overflowY = el.scrollHeight > el.clientHeight;
+
+    if (overflowX || overflowY) return true;
+
+    // check parent
+    const parentOverflowX = el.parentElement.scrollWidth > el.parentElement.clientWidth;
+    const parentOverflowY = el.parentElement.scrollHeight > el.parentElement.clientHeight;
+
+    return parentOverflowX || parentOverflowY;
+  };
+
+  bindRef = (ref) => {
+    this.ref = ref;
+
+    resizeDetector.listenTo(this.ref, (element) => {
+      this.resize();
+    });
+
+    this.setState({ loaded: true }, this.resize);
+  };
+
+  render() {
+    const { loaded, fontSize } = this.state;
+    const { style, children } = this.props;
+    const fontSizeWithUnit = `${fontSize}${this.props.fontSize.unit}`;
+    // console.log(fontSizeWithUnit);
+
+    return (
+      <div
+        ref={this.bindRef}
+        style={{
+          ...style,
+          height: '100%',
+          fontSize: fontSizeWithUnit,
+          display: loaded ? style.display : 'none',
+        }}
+      >
+        {children}
+      </div>
+    )
+  }
+}
+
+Textfit.propTypes = {
+  fontSize: PropTypes.shape({
+    min: PropTypes.number,
+    max: PropTypes.number,
+    unit: PropTypes.oneOf(['px', 'vw']),
+  }),
+  style: PropTypes.object,
+};
+
+Textfit.defaultProps = {
+  fontSize: defaultProps.fontSize,
+  style: defaultProps.style,
+};
+
+Textfit.displayName = 'Textfit';
+
+export default Textfit;

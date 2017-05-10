@@ -458,6 +458,7 @@ body {
 }
 
 .row {
+    border: 1px solid black;
     margin-bottom: 30px;
     position: relative;
     overflow: hidden;
@@ -514,4 +515,8 @@ textarea {
     padding-top: 15px;
     padding-bottom: 15px;
     text-transform: uppercase;
+}
+
+.textfit {
+
 }
